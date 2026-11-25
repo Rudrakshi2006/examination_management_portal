@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}{{ role }} dashboard · EMP{% endblock %}
+{% block content %}
+<h1 class="h3">{{ role }} dashboard</h1>
+<p>Signed in as {{ g.user['name'] }}.</p>
+<p class="text-secondary">Account status: {{ g.user['status'] }}. This is the Foundation dashboard placeholder.</p>
+{% endblock %}

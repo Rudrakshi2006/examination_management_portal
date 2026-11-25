@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h3">{{ error.code }} · {{ error.name }}</h1>
+<p>{{ error.description }}</p>
+<a href="{{ url_for('index') }}">Return to portal</a>
+{% endblock %}

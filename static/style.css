@@ -1,0 +1,7 @@
+body { background: #f5f6f8; color: #243040; }
+.container { max-width: 960px; }
+.brand { color: #243040; text-decoration: none; font-weight: 600; }
+.form-panel { max-width: 440px; padding: 1.5rem; background: white; border: 1px solid #dce0e5; border-radius: .3rem; }
+.form-label { font-weight: 500; }
+.btn-primary { --bs-btn-bg: #243e5a; --bs-btn-border-color: #243e5a; --bs-btn-hover-bg: #192d43; --bs-btn-hover-border-color: #192d43; --bs-btn-active-bg: #192d43; }
+a { color: #254c76; }
