@@ -1,9 +1,11 @@
-# Examination Management Portal — v0.1 Foundation
+# Examination Management Portal — Foundation and Day 2 Admin setup
 
 Day 1 implements SQLite initialization, one locally configured Admin, Student and
 Examiner registration, login/logout and protected dashboard placeholders. Students
 are Active immediately. Examiners start Pending; only Approved examiners can use
-their dashboard. Approval UI and all exam-management features belong to later days.
+their dashboard. Day 2 adds Admin course/exam management, counts, timelines and
+manual phase controls. Approval UI, assignments, rubrics, slots and bookings
+belong to later days.
 
 ## macOS setup and quick demo
 
@@ -36,6 +38,7 @@ For later demo sessions:
 
 ```sh
 source .venv/bin/activate
+python -m flask --app app init-db
 python -m flask --app app run --port 5000
 ```
 
@@ -53,6 +56,49 @@ They do not modify your local accounts. They cover repeat initialization and
 password preservation, registration, role/status enforcement, temporary database
 approval and deactivation, validation, CSRF, logout and local CSS delivery.
 macOS shell setup and visual browser layout require a local manual check.
+
+## Day 2 upgrade and Admin demo
+
+On an existing Day 1 installation, stop the server and run `python -m flask --app app
+init-db` from the activated virtual environment, then restart the server. This adds
+`courses` and `exams` without removing users or resetting the Admin password.
+The same command works for a fresh installation and is safe to repeat.
+
+1. Sign in as Admin. Check the six dashboard totals. Course/exam counts include
+   archived rows; account counts include all statuses. Slots/bookings show zero
+   with an explicit label until their tables are introduced in later milestones.
+2. Create a course, edit it, then create an exam linked to it. Enter duration and
+   maximum marks as positive whole numbers. Type is a short text label, such as
+   Practical. Each new exam starts in Draft.
+3. Enter all four timeline timestamps as IST, regardless of your Mac's timezone.
+   Use creation start < creation end ≤ booking start < booking deadline. Creation
+   end may equal booking start. Dates and current phase appear on the exam page.
+4. Try overlapping windows; the server shows errors and leaves the saved exam
+   unchanged. Change the phase using its separate form. Phase selection is manual,
+   independent of the clock; future slot/booking actions must check both. Once the
+   booking start is reached, Draft/Slot Creation and later creation-end or
+   booking-start edits are rejected to prevent reopening examiner editing.
+5. Remove an unused Draft exam or unused course to delete it. Remove a course with
+   an exam to archive the course; its exam link remains intact. Remove a non-Draft
+   or referenced exam to archive it. Archived records remain listed for Admin and
+   are read-only. An existing exam may retain its archived course, but new exams
+   cannot select that course.
+6. Sign out or sign in as Student/Examiner and try `/admin/courses` directly;
+   signed-out users go to login and other roles receive 403.
+
+Day 2 tests run the same Admin checks against a fresh database and a database
+first initialized with the original Day 1 users-only schema (fixture under
+`tests/fixtures/`). They check that complete existing user rows survive the
+upgrade, then exercise counts, CRUD, archival, timing, phases, access control and
+CSRF through real routes. Synthetic test-only dependent tables verify reference
+preservation and counting; no later-milestone tables or workflows are added to
+the application schema.
+
+The Admin route handlers are in `admin.py`: `dashboard`, `courses`, `course_form`,
+`remove_course`, `exams`, `exam_form`, `exam_detail`, `change_phase`, `remove_exam`.
+`validate_exam` checks submitted course IDs, fields and ordered IST dates;
+`get_course` / `get_exam` load records or return 404. The forms extend the existing
+shared base and use the original CSRF and `role_required` helpers.
 
 ## Viva: form → route → database → page
 

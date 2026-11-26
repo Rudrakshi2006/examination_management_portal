@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}{{ exam['name'] }} · EMP{% endblock %}
+{% block content %}
+<h1 class="h3">{{ exam['name'] }}</h1>
+<p>{{ exam['course_code'] }} — {{ exam['course_name'] }} · {{ exam['exam_type'] }}</p>
+<p>{{ exam['duration_minutes'] }} minutes · Maximum marks: {{ exam['maximum_marks'] }}</p>
+<p><strong>Current phase: {{ exam['phase'] }}</strong> · {{ 'Archived (read-only)' if exam['archived'] else 'Active' }}</p>
+<h2 class="h5">Timeline · IST (UTC+05:30)</h2>
+<p class="small">Creation start &lt; creation end ≤ booking start &lt; booking end. Windows include their start and exclude their end.</p>
+<div class="table-responsive"><table class="table table-sm table-bordered bg-white">
+  <thead><tr><th scope="col">Window</th><th scope="col">Start (included, IST)</th><th scope="col">End (excluded, IST)</th></tr></thead>
+  <tbody><tr><th scope="row">Slot creation</th><td>{{ exam['creation_start']|replace('T', ' ') }}</td><td>{{ exam['creation_end']|replace('T', ' ') }}</td></tr>
+  <tr><th scope="row">Booking</th><td>{{ exam['booking_start']|replace('T', ' ') }}</td><td>{{ exam['booking_end']|replace('T', ' ') }}</td></tr></tbody>
+</table></div>
+{% if not exam['archived'] %}
+<p><a href="{{ url_for('admin.exam_form', exam_id=exam['id']) }}">Edit exam and timeline</a></p>
+<form class="form-panel mb-4" method="post" action="{{ url_for('admin.change_phase', exam_id=exam['id']) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label" for="phase">Exam phase</label>
+  <select class="form-select mb-3" id="phase" name="phase" required>{% for phase in phases %}<option {% if exam['phase'] == phase %}selected{% endif %}>{{ phase }}</option>{% endfor %}</select>
+  <p class="small text-secondary">Admin sets the phase manually. Future creation and booking actions also require their time window. Examiner editing cannot reopen after booking begins.</p>
+  <button class="btn btn-primary" type="submit">Update phase</button>
+</form>
+<form method="post" action="{{ url_for('admin.remove_exam', exam_id=exam['id']) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p class="small">Remove deletes an unused Draft exam. Referenced or non-Draft exams are archived and remain accessible.</p>
+  <button class="btn btn-outline-danger btn-sm" type="submit">Remove exam</button>
+</form>
+{% endif %}
+{% endblock %}

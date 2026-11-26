@@ -89,6 +89,24 @@ Use GET for reads and search filters, POST for mutations with CSRF protection, t
 
 ## UI and demo
 
+Day 2 implementation choices: `init-db` adds only `courses` and `exams` to the
+Day 1 schema. Timeline fields `creation_start`, `creation_end`, `booking_start`
+and `booking_end` store canonical `YYYY-MM-DDTHH:MM` values in IST (UTC+05:30),
+independent of the host timezone. The UI labels all four times and half-open
+windows explicitly. Phases are manually selected; future action routes must
+enforce both the phase and the time window. At or after the saved booking start,
+Admin cannot return to Draft/Slot Creation or move creation end/booking start
+later to reopen examiner editing.
+
+Removal deletes unused courses and unused Draft exams. Foreign-key references
+cause archival instead; non-Draft exams are also retained through archival.
+Archived records remain visible to Admin and are read-only. Existing exams retain
+their archived course links, but new links require an unarchived course. Dashboard
+counts include archived courses/exams and all account statuses. Until slots and
+bookings are introduced, their absent tables are explicitly labelled with zero
+records; no partial later-phase schemas are created. Slot-dependent timeline
+validation must be added with the slot schema in EMP-04.
+
 Use a neutral Bootstrap layout with white backgrounds, navy primary actions, compact tables and plain status badges. Keep one primary action per page. Use responsive table wrappers, accessible labels and readable validation errors.
 
 Demo exam is DBMS Practical, with Query Correctness 15, Execution 10 and Explanation 5. Use two future slots to show capacity and rescheduling, then a separately seeded past slot to show evaluation and publication. Walk through each action as form → route → permission check → SQL → redirect.

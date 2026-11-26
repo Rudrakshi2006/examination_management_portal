@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if exam else 'Create' }} exam · EMP{% endblock %}
+{% block content %}
+<section class="form-panel">
+<h1 class="h3 mb-3">{{ 'Edit' if exam else 'Create' }} exam</h1>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="mb-3"><label class="form-label" for="course_id">Course</label><select class="form-select" id="course_id" name="course_id" required>
+    <option value="">Choose a course</option>
+    {% for course in courses %}{% if not course['archived'] or (exam and exam['course_id'] == course['id']) %}
+    <option value="{{ course['id'] }}" {% if values.get('course_id', '')|string == course['id']|string %}selected{% endif %}>{{ course['code'] }} — {{ course['name'] }}{{ ' (archived; existing exam only)' if course['archived'] else '' }}</option>
+    {% endif %}{% endfor %}
+  </select></div>
+  {% for field, label, limit in [('name', 'Exam name', 100), ('exam_type', 'Exam type', 50)] %}
+  <div class="mb-3"><label class="form-label" for="{{ field }}">{{ label }}</label><input class="form-control" id="{{ field }}" name="{{ field }}" maxlength="{{ limit }}" value="{{ values.get(field, '') }}" required></div>
+  {% endfor %}
+  {% for field, label, maximum in [('duration_minutes', 'Duration (minutes)', 1440), ('maximum_marks', 'Maximum marks', 10000)] %}
+  <div class="mb-3"><label class="form-label" for="{{ field }}">{{ label }}</label><input class="form-control" id="{{ field }}" name="{{ field }}" type="number" min="1" max="{{ maximum }}" step="1" value="{{ values.get(field, '') }}" required></div>
+  {% endfor %}
+  <fieldset><legend class="h5">Timeline · IST (UTC+05:30)</legend>
+    <p class="small">Creation start &lt; creation end ≤ booking start &lt; booking end. Each window includes its start and excludes its end.</p>
+    {% for field, label in [('creation_start', 'Slot creation start'), ('creation_end', 'Slot creation end'), ('booking_start', 'Booking start'), ('booking_end', 'Booking deadline')] %}
+    <div class="mb-3"><label class="form-label" for="{{ field }}">{{ label }} (IST)</label><input class="form-control" id="{{ field }}" name="{{ field }}" type="datetime-local" step="60" value="{{ values.get(field, '') }}" required></div>
+    {% endfor %}
+  </fieldset>
+  <p class="small text-secondary">New exams start in Draft. Phase is changed separately on the exam page.</p>
+  <button class="btn btn-primary" type="submit">Save exam</button>
+  <a class="ms-2" href="{{ url_for('admin.exams') }}">Cancel</a>
+</form>
+</section>
+{% endblock %}

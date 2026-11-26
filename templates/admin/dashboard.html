@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Admin dashboard · EMP{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Admin dashboard</h1>
+<div class="table-responsive">
+  <table class="table table-sm table-bordered bg-white">
+    <thead><tr><th scope="col">Record</th><th scope="col">Total</th><th scope="col">Included records</th></tr></thead>
+    <tbody>{% for label, total in counts.items() %}
+      <tr><th scope="row">{{ label }}</th><td>{{ total }}</td><td>
+        {% if label in ('Courses', 'Exams') %}All records, including archived
+        {% elif label in ('Examiners', 'Students') %}All account statuses; accounts have no archive flag
+        {% elif label in unavailable %}Not implemented yet; no records table exists; archival not applicable
+        {% else %}All records, including any archived or historical records{% endif %}
+      </td></tr>
+    {% endfor %}</tbody>
+  </table>
+</div>
+{% endblock %}

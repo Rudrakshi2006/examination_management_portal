@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if course else 'Create' }} course · EMP{% endblock %}
+{% block content %}
+<section class="form-panel">
+<h1 class="h3 mb-3">{{ 'Edit' if course else 'Create' }} course</h1>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="mb-3"><label class="form-label" for="code">Course code</label><input class="form-control" id="code" name="code" maxlength="30" value="{{ values.get('code', '') }}" required></div>
+  <div class="mb-3"><label class="form-label" for="name">Course name</label><input class="form-control" id="name" name="name" maxlength="100" value="{{ values.get('name', '') }}" required></div>
+  <div class="mb-3"><label class="form-label" for="description">Description (optional)</label><textarea class="form-control" id="description" name="description" rows="3" maxlength="2000">{{ values.get('description', '') }}</textarea></div>
+  <button class="btn btn-primary" type="submit">Save course</button>
+  <a class="ms-2" href="{{ url_for('admin.courses') }}">Cancel</a>
+</form>
+</section>
+{% endblock %}
