@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Examiner dashboard · EMP{% endblock %}
+{% block content %}
+<h1 class="h3">Examiner dashboard</h1>
+<p>Signed in as {{ g.user['name'] }}. <span class="badge text-bg-light border">{{ g.user['status'] }}</span></p>
+<h2 class="h5">Your assigned exams</h2>
+<p class="small text-secondary">Only your assignments appear here, including archived exams for history.</p>
+<div class="table-responsive"><table class="table table-sm table-bordered bg-white">
+  <thead><tr><th scope="col">ID</th><th scope="col">Exam</th><th scope="col">Course</th><th scope="col">Phase</th><th scope="col">Status</th></tr></thead>
+  <tbody>{% for exam in exams %}<tr><td>{{ exam['id'] }}</td><td>{{ exam['name'] }}</td><td>{{ exam['course_code'] }}</td><td>{{ exam['phase'] }}</td><td><span class="badge text-bg-light border">{{ 'Archived' if exam['archived'] else 'Active' }}</span></td></tr>
+  {% else %}<tr><td colspan="5">No exams assigned yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

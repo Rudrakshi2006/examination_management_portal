@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Rubric criterion · EMP{% endblock %}
+{% block content %}
+<section class="form-panel">
+  <h1 class="h3">{{ 'Edit' if criterion else 'Add' }} rubric criterion</h1>
+  <p>{{ exam['name'] }} · Exam maximum: {{ exam['maximum_marks'] }}</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3"><label class="form-label" for="name">Criterion name</label><input class="form-control" id="name" name="name" maxlength="100" value="{{ values.get('name', '') }}" required></div>
+    <div class="mb-3"><label class="form-label" for="maximum_marks">Maximum marks (whole number)</label><input class="form-control" id="maximum_marks" name="maximum_marks" type="number" min="1" max="{{ exam['maximum_marks'] }}" step="1" value="{{ values.get('maximum_marks', '') }}" required></div>
+    <div class="mb-3"><label class="form-label" for="description">Description (optional)</label><textarea class="form-control" id="description" name="description" rows="3" maxlength="2000">{{ values.get('description', '') }}</textarea></div>
+    <button class="btn btn-primary" type="submit">Save criterion</button>
+    <a class="ms-2" href="{{ url_for('admin.exam_detail', exam_id=exam['id']) }}">Cancel</a>
+  </form>
+</section>
+{% endblock %}

@@ -54,35 +54,45 @@ def login():
     return render_template('auth/login.html', errors=errors), 400 if errors else 200
 
 
+def validate_account(values):
+    """Shared validation for public registration and Admin-created examiners."""
+    data = {field: values.get(field, '').strip() for field in ('name', 'email', 'contact', 'department')}
+    data['email'] = data['email'].lower()
+    data['password'] = values.get('password', '')
+    errors = []
+    if not 1 <= len(data['name']) <= 100:
+        errors.append('Name must contain 1–100 characters.')
+    if len(data['email']) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', data['email']):
+        errors.append('Enter a valid email address.')
+    if not 8 <= len(data['password']) <= 128:
+        errors.append('Password must contain 8–128 characters.')
+    if data['password'] != values.get('confirm_password', ''):
+        errors.append('Passwords do not match.')
+    if len(data['contact']) > 30 or len(data['department']) > 100:
+        errors.append('Contact must be at most 30 characters and department at most 100.')
+    return data, errors
+
+
+def insert_account(connection, data, role, status):
+    """Caller supplies a fixed role/status and owns the transaction."""
+    return connection.execute(
+        'INSERT INTO users (name, email, password_hash, role, status, contact, department) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (data['name'], data['email'], generate_password_hash(data['password']), role,
+         status, data['contact'], data['department']),
+    )
+
+
 def register(role):
     """Role comes from the route, never from submitted form fields."""
     errors = []
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        contact = request.form.get('contact', '').strip()
-        department = request.form.get('department', '').strip()
-        if not 1 <= len(name) <= 100:
-            errors.append('Name must contain 1–100 characters.')
-        if len(email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
-            errors.append('Enter a valid email address.')
-        if not 8 <= len(password) <= 128:
-            errors.append('Password must contain 8–128 characters.')
-        if password != request.form.get('confirm_password', ''):
-            errors.append('Passwords do not match.')
-        if len(contact) > 30 or len(department) > 100:
-            errors.append('Contact must be at most 30 characters and department at most 100.')
+        data, errors = validate_account(request.form)
         if not errors:
             connection = get_db()
             try:
                 with connection:
-                    connection.execute(
-                        'INSERT INTO users (name, email, password_hash, role, status, contact, department) '
-                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        (name, email, generate_password_hash(password), role,
-                         'Pending' if role == 'Examiner' else 'Active', contact, department),
-                    )
+                    insert_account(connection, data, role, 'Pending' if role == 'Examiner' else 'Active')
             except sqlite3.IntegrityError:
                 errors.append('That email is already registered. Sign in or use another email.')
             else:

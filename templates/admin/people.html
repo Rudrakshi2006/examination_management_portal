@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}People · EMP{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3 mb-0">People</h1><a class="btn btn-primary btn-sm" href="{{ url_for('admin.create_examiner') }}">Create examiner</a></div>
+<p class="text-secondary">Students and examiners, including Pending and Inactive accounts. Deactivation retains assignment history.</p>
+<form class="mb-3" method="get">
+  <label class="form-label" for="q">Search name or numeric user ID</label>
+  <div class="d-flex gap-2"><input class="form-control" id="q" name="q" value="{{ query }}"><button class="btn btn-outline-secondary" type="submit">Search</button><a class="btn btn-link" href="{{ url_for('admin.people') }}">Clear</a></div>
+</form>
+<div class="table-responsive"><table class="table table-sm table-bordered align-middle bg-white">
+  <thead><tr><th scope="col">ID</th><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+  <tbody>{% for person in people %}<tr>
+    <td>{{ person['id'] }}</td><td>{{ person['name'] }}</td><td class="text-break">{{ person['email'] }}</td><td>{{ person['role'] }}</td><td><span class="badge text-bg-light border">{{ person['status'] }}</span></td>
+    <td>{% if person['role'] == 'Examiner' and person['status'] != 'Inactive' %}
+      {% if person['status'] == 'Pending' %}<form class="d-inline" method="post" action="{{ url_for('admin.approve_examiner', user_id=person['id']) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-secondary btn-sm" type="submit" aria-label="Approve {{ person['name'] }}">Approve</button></form>{% endif %}
+      <form class="d-inline" method="post" action="{{ url_for('admin.deactivate_examiner', user_id=person['id']) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-danger btn-sm" type="submit" aria-label="Deactivate {{ person['name'] }}">Deactivate</button></form>
+    {% else %}—{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="6">No matching people.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

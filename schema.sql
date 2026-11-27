@@ -42,3 +42,18 @@ CREATE TABLE IF NOT EXISTS exams (
     CHECK (creation_start < creation_end AND creation_end <= booking_start AND booking_start < booking_end)
 );
 CREATE INDEX IF NOT EXISTS exams_course ON exams(course_id);
+
+CREATE TABLE IF NOT EXISTS examiner_assignments (
+    exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE RESTRICT,
+    examiner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    PRIMARY KEY (exam_id, examiner_id)
+);
+
+CREATE TABLE IF NOT EXISTS rubrics (
+    id INTEGER PRIMARY KEY,
+    exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE RESTRICT,
+    name TEXT NOT NULL COLLATE NOCASE CHECK (length(trim(name)) BETWEEN 1 AND 100),
+    maximum_marks INTEGER NOT NULL CHECK (maximum_marks BETWEEN 1 AND 10000),
+    description TEXT NOT NULL DEFAULT '' CHECK (length(description) <= 2000),
+    UNIQUE (exam_id, name)
+);

@@ -109,4 +109,22 @@ validation must be added with the slot schema in EMP-04.
 
 Use a neutral Bootstrap layout with white backgrounds, navy primary actions, compact tables and plain status badges. Keep one primary action per page. Use responsive table wrappers, accessible labels and readable validation errors.
 
+Day 3 adds only `examiner_assignments` and `rubrics` through repeatable `init-db`.
+Admin-created examiners start Approved; public examiner registrations stay Pending.
+Only Pending examiners can be approved, and deactivation retains their assignments.
+People excludes Admin accounts and searches Students/Examiners in all statuses.
+People and Exams search by case-insensitive name substring or exact numeric ID;
+archived exam matches remain visible. Assignment requires an Approved Examiner and
+a non-archived exam (the meaning of active here), checked inside a write transaction.
+Approved examiners see only their own assignments, including archived history.
+
+Rubric maxima use positive whole marks, matching the existing integer exam maximum.
+Partial totals are allowed while configuring an exam; totals above its maximum
+are rejected. Rubric writes and exam-maximum changes take `BEGIN IMMEDIATE` before
+checking totals, so they cannot race past the limit. Weightage is calculated from
+the current exam maximum, never stored. Criterion names are unique within an exam
+with SQLite NOCASE comparison. Archived rubric/assignment data stays read-only.
+Exact-match checks at evaluation time and freezing after the first evaluation
+remain EMP-07 responsibilities; no evaluation schema or workflow exists yet.
+
 Demo exam is DBMS Practical, with Query Correctness 15, Execution 10 and Explanation 5. Use two future slots to show capacity and rescheduling, then a separately seeded past slot to show evaluation and publication. Walk through each action as form → route → permission check → SQL → redirect.

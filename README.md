@@ -1,10 +1,11 @@
-# Examination Management Portal — Foundation and Day 2 Admin setup
+# Examination Management Portal — v0.2 Admin setup
 
 Day 1 implements SQLite initialization, one locally configured Admin, Student and
 Examiner registration, login/logout and protected dashboard placeholders. Students
 are Active immediately. Examiners start Pending; only Approved examiners can use
 their dashboard. Day 2 adds Admin course/exam management, counts, timelines and
-manual phase controls. Approval UI, assignments, rubrics, slots and bookings
+manual phase controls. Day 3 adds People/Exam search, examiner creation,
+approval/deactivation, assignments and rubrics. Slots, bookings and evaluation
 belong to later days.
 
 ## macOS setup and quick demo
@@ -100,7 +101,66 @@ The Admin route handlers are in `admin.py`: `dashboard`, `courses`, `course_form
 `get_course` / `get_exam` load records or return 404. The forms extend the existing
 shared base and use the original CSRF and `role_required` helpers.
 
+## Day 3 upgrade and demo
+
+With the virtual environment activated, stop the server and run:
+
+```sh
+python -m flask --app app init-db
+python -m unittest discover -s tests -v
+python -m flask --app app run --port 5000
+```
+
+Initialization adds `examiner_assignments` and `rubrics` without clearing Day 2
+users, courses or exams. It remains safe to repeat. No dependency changes are needed.
+
+1. Register an Examiner through the public form. Sign in to see Pending approval.
+   In another browser profile, sign in as Admin, open People, and search by name
+   or numeric user ID. Approve the request. The Examiner's next request can reach
+   the dashboard without another login.
+2. On People, use Create examiner to create an immediately Approved account with
+   the same validation and password hashing as public registration. Approval is
+   limited to Pending examiners. Deactivation is limited to examiner accounts;
+   inactive accounts cannot be reapproved through the Pending approval action.
+3. Open a non-archived exam, select an Approved examiner and assign them. The
+   exam detail page lists assignments and each examiner's current status. Pending,
+   Inactive, Student and Admin accounts cannot be assigned. Duplicate assignments
+   are rejected. Assignments remain stored after deactivation and archival.
+4. Create a 30-mark DBMS Practical rubric using Query Correctness 15, Execution 10
+   and Explanation 5. The running totals are 15/30, 25/30 and 30/30; weights are
+   50.00%, 33.33% and 16.67%. Edit and delete a criterion to see totals update.
+   Partial rubrics are allowed, but the sum may never exceed the exam maximum.
+   Marks are positive whole numbers. Criterion names are unique per exam ignoring
+   ASCII letter case. The exam maximum cannot be lowered below its rubric total.
+5. Search Exams by name or numeric exam ID; archived matches remain accessible.
+   Archived exams display assignments/rubrics read-only. The approved Examiner
+   dashboard lists only that logged-in examiner's assignments, including archived
+   exams for history. Deactivate them in the Admin profile and refresh their
+   dashboard: access is denied immediately on the next request.
+
+Search uses case-insensitive name substrings and exact numeric IDs. `%` and `_`
+are literal characters. People includes Students and Examiners in all statuses;
+Admin accounts are excluded. A non-archived exam is considered active for Admin
+assignment/rubric configuration; phases remain independently controlled.
+
+Day 3 tests run against both fresh databases and databases first initialized using
+the preserved Day 2 schema. Complete pre-existing user/course/exam rows are
+compared before and after the upgrade. No test writes to your local runtime data.
+
+Evaluation is not implemented. Its later milestone must require an exact rubric
+total and freeze criteria/exam maximum after the first evaluation, as specified
+in architecture.md.
+
 ## Viva: form → route → database → page
+
+For Day 3, trace `admin.py:people` / `exams` for GET search, `create_examiner` for
+shared `auth.py:validate_account` / `insert_account`, and `approve_examiner` /
+`deactivate_examiner` for account-status updates. `assign_examiner` checks the
+current exam and examiner inside a write transaction. `rubric_form` checks the
+running total before saving; `delete_criterion` scopes the ID to its exam.
+`render_exam_detail` loads assignments and totals, while `examiner.py:dashboard`
+filters assignments by the logged-in user ID. Weightage is calculated in the
+Jinja template, not stored in SQLite.
 
 - `app.py:create_app` loads private configuration, registers the role Blueprints
   and checks POST CSRF tokens in `protect_forms`.

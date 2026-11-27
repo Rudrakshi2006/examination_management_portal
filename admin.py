@@ -1,9 +1,10 @@
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
-from auth import role_required
+from auth import insert_account, role_required, validate_account
 from db import get_db
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -17,6 +18,8 @@ def now_ist():
 
 
 def get_course(course_id):
+    if not 0 < course_id <= 9223372036854775807:
+        abort(404, description='Course not found.')
     course = get_db().execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
     if course is None:
         abort(404, description='Course not found.')
@@ -24,6 +27,8 @@ def get_course(course_id):
 
 
 def get_exam(exam_id):
+    if not 0 < exam_id <= 9223372036854775807:
+        abort(404, description='Exam not found.')
     exam = get_db().execute(
         'SELECT exams.*, courses.code AS course_code, courses.name AS course_name '
         'FROM exams JOIN courses ON courses.id = exams.course_id WHERE exams.id = ?', (exam_id,),
@@ -116,11 +121,14 @@ def remove_course(course_id):
 @bp.get('/exams')
 @role_required('Admin', ('Active',))
 def exams():
+    query = request.args.get('q', '').strip()
     rows = get_db().execute(
         'SELECT exams.*, courses.code AS course_code FROM exams '
-        'JOIN courses ON courses.id = exams.course_id ORDER BY exams.archived, exams.id DESC'
+        'JOIN courses ON courses.id = exams.course_id '
+        'WHERE (? = ? OR instr(lower(exams.name), lower(?)) > 0 OR exams.id = ?) '
+        'ORDER BY exams.archived, exams.id DESC', (query, '', query, numeric_search_id(query)),
     ).fetchall()
-    return render_template('admin/exams.html', exams=rows)
+    return render_template('admin/exams.html', exams=rows, query=query)
 
 
 def validate_exam(values, existing):
@@ -147,6 +155,10 @@ def validate_exam(values, existing):
             errors.append('Enter all four timeline dates as valid local IST dates and times.')
             break
     if not errors:
+        if existing:
+            total = get_db().execute('SELECT coalesce(sum(maximum_marks), 0) FROM rubrics WHERE exam_id = ?', (existing['id'],)).fetchone()[0]
+            if data['maximum_marks'] < total:
+                errors.append(f'Exam maximum cannot be lower than the rubric total ({total}).')
         if not data['creation_start'] < data['creation_end'] <= data['booking_start'] < data['booking_end']:
             errors.append('Timeline must satisfy: creation start < creation end ≤ booking start < booking end.')
         if existing and now_ist() >= existing['booking_start']:
@@ -165,12 +177,15 @@ def exam_form(exam_id=None):
     values = dict(request.form) if request.method == 'POST' else dict(exam or {})
     errors = []
     if request.method == 'POST':
-        data, errors = validate_exam(values, exam)
-        if not errors:
-            fields = ('course_id', 'name', 'exam_type', 'duration_minutes', 'maximum_marks') + TIMELINE_FIELDS
-            parameters = tuple(data[field] for field in fields)
-            connection = get_db()
-            with connection:
+        connection = get_db()
+        with connection:
+            connection.execute('BEGIN IMMEDIATE')
+            if exam is not None:
+                exam = get_active_exam(exam_id)
+            data, errors = validate_exam(values, exam)
+            if not errors:
+                fields = ('course_id', 'name', 'exam_type', 'duration_minutes', 'maximum_marks') + TIMELINE_FIELDS
+                parameters = tuple(data[field] for field in fields)
                 if exam is None:
                     cursor = connection.execute(
                         'INSERT INTO exams (course_id, name, exam_type, duration_minutes, maximum_marks, creation_start, creation_end, booking_start, booking_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', parameters,
@@ -180,6 +195,7 @@ def exam_form(exam_id=None):
                     connection.execute(
                         'UPDATE exams SET course_id = ?, name = ?, exam_type = ?, duration_minutes = ?, maximum_marks = ?, creation_start = ?, creation_end = ?, booking_start = ?, booking_end = ? WHERE id = ?', parameters + (exam_id,),
                     )
+        if not errors:
             flash('Exam saved. All timeline times are IST.')
             return redirect(url_for('admin.exam_detail', exam_id=exam_id))
     available_courses = get_db().execute('SELECT * FROM courses ORDER BY archived, code').fetchall()
@@ -189,7 +205,7 @@ def exam_form(exam_id=None):
 @bp.get('/exams/<int:exam_id>')
 @role_required('Admin', ('Active',))
 def exam_detail(exam_id):
-    return render_template('admin/exam_detail.html', exam=get_exam(exam_id), phases=PHASES)
+    return render_exam_detail(exam_id)
 
 
 @bp.post('/exams/<int:exam_id>/phase')
@@ -205,7 +221,7 @@ def change_phase(exam_id):
     elif phase in ('Draft', 'Slot Creation') and now_ist() >= exam['booking_start']:
         errors.append('Cannot reopen examiner editing after booking has begun.')
     if errors:
-        return render_template('admin/exam_detail.html', exam=exam, phases=PHASES, errors=errors), 400
+        return render_exam_detail(exam_id, errors, 400)
     with get_db() as connection:
         connection.execute('UPDATE exams SET phase = ? WHERE id = ?', (phase, exam_id))
     flash('Exam phase updated.')
@@ -235,3 +251,192 @@ def remove_exam(exam_id):
         else:
             flash('Unused Draft exam deleted.')
     return redirect(url_for('admin.exams'))
+
+
+def numeric_search_id(query):
+    if re.fullmatch(r'[0-9]{1,19}', query):
+        value = int(query)
+        if 0 < value <= 9223372036854775807:
+            return value
+    return None
+
+
+@bp.get('/people')
+@role_required('Admin', ('Active',))
+def people():
+    query = request.args.get('q', '').strip()
+    rows = get_db().execute(
+        "SELECT id, name, email, role, status, contact, department FROM users "
+        "WHERE role IN ('Student', 'Examiner') "
+        'AND (? = ? OR instr(lower(name), lower(?)) > 0 OR id = ?) ORDER BY role, name, id',
+        (query, '', query, numeric_search_id(query)),
+    ).fetchall()
+    return render_template('admin/people.html', people=rows, query=query)
+
+
+@bp.route('/people/examiners/new', methods=('GET', 'POST'))
+@role_required('Admin', ('Active',))
+def create_examiner():
+    errors = []
+    if request.method == 'POST':
+        data, errors = validate_account(request.form)
+        if not errors:
+            connection = get_db()
+            try:
+                with connection:
+                    insert_account(connection, data, 'Examiner', 'Approved')
+            except sqlite3.IntegrityError:
+                errors.append('That email is already registered. Use another email.')
+            else:
+                flash('Approved Examiner account created.')
+                return redirect(url_for('admin.people'))
+    return render_template('auth/register.html', role='Examiner', admin_create=True, errors=errors), 400 if errors else 200
+
+
+def get_examiner(user_id):
+    if not 0 < user_id <= 9223372036854775807:
+        abort(404, description='Examiner not found.')
+    user = get_db().execute("SELECT * FROM users WHERE id = ? AND role = 'Examiner'", (user_id,)).fetchone()
+    if user is None:
+        abort(404, description='Examiner not found.')
+    return user
+
+
+@bp.post('/people/<int:user_id>/approve')
+@role_required('Admin', ('Active',))
+def approve_examiner(user_id):
+    connection = get_db()
+    with connection:
+        connection.execute('BEGIN IMMEDIATE')
+        examiner = get_examiner(user_id)
+        if examiner['status'] != 'Pending':
+            abort(400, description='Only Pending examiners can be approved.')
+        connection.execute("UPDATE users SET status = 'Approved' WHERE id = ?", (user_id,))
+    flash('Examiner approved.')
+    return redirect(url_for('admin.people'))
+
+
+@bp.post('/people/<int:user_id>/deactivate')
+@role_required('Admin', ('Active',))
+def deactivate_examiner(user_id):
+    connection = get_db()
+    with connection:
+        connection.execute('BEGIN IMMEDIATE')
+        examiner = get_examiner(user_id)
+        if examiner['status'] == 'Inactive':
+            abort(400, description='This examiner is already inactive.')
+        connection.execute("UPDATE users SET status = 'Inactive' WHERE id = ?", (user_id,))
+    flash('Examiner deactivated. Existing assignments are retained for history.')
+    return redirect(url_for('admin.people'))
+
+
+def get_active_exam(exam_id):
+    exam = get_exam(exam_id)
+    if exam['archived']:
+        abort(403, description='Archived exams are read-only.')
+    return exam
+
+
+def render_exam_detail(exam_id, errors=None, status=200):
+    exam = get_exam(exam_id)
+    connection = get_db()
+    assignments = connection.execute(
+        'SELECT users.id, users.name, users.status FROM examiner_assignments '
+        'JOIN users ON users.id = examiner_assignments.examiner_id WHERE exam_id = ? ORDER BY users.name', (exam_id,),
+    ).fetchall()
+    eligible = connection.execute(
+        "SELECT id, name FROM users WHERE role = 'Examiner' AND status = 'Approved' "
+        'AND NOT EXISTS (SELECT 1 FROM examiner_assignments WHERE exam_id = ? AND examiner_id = users.id) ORDER BY name', (exam_id,),
+    ).fetchall()
+    rubrics = connection.execute('SELECT * FROM rubrics WHERE exam_id = ? ORDER BY id', (exam_id,)).fetchall()
+    total = sum(row['maximum_marks'] for row in rubrics)
+    return render_template('admin/exam_detail.html', exam=exam, phases=PHASES, assignments=assignments,
+                           eligible=eligible, rubrics=rubrics, rubric_total=total, errors=errors), status
+
+
+@bp.post('/exams/<int:exam_id>/assign')
+@role_required('Admin', ('Active',))
+def assign_examiner(exam_id):
+    examiner_id = numeric_search_id(request.form.get('examiner_id', '').strip())
+    errors = []
+    connection = get_db()
+    with connection:
+        connection.execute('BEGIN IMMEDIATE')
+        get_active_exam(exam_id)
+        examiner = connection.execute("SELECT id FROM users WHERE id = ? AND role = 'Examiner' AND status = 'Approved'", (examiner_id,)).fetchone()
+        if examiner is None:
+            errors.append('Choose an Approved Examiner account.')
+        else:
+            try:
+                connection.execute('INSERT INTO examiner_assignments (exam_id, examiner_id) VALUES (?, ?)', (exam_id, examiner_id))
+            except sqlite3.IntegrityError:
+                errors.append('This examiner is already assigned to this exam.')
+    if errors:
+        return render_exam_detail(exam_id, errors, 400)
+    flash('Examiner assigned.')
+    return redirect(url_for('admin.exam_detail', exam_id=exam_id))
+
+
+def get_criterion(exam_id, criterion_id):
+    if not 0 < criterion_id <= 9223372036854775807:
+        abort(404, description='Criterion not found in this exam.')
+    criterion = get_db().execute('SELECT * FROM rubrics WHERE id = ? AND exam_id = ?', (criterion_id, exam_id)).fetchone()
+    if criterion is None:
+        abort(404, description='Criterion not found in this exam.')
+    return criterion
+
+
+@bp.route('/exams/<int:exam_id>/rubrics/new', methods=('GET', 'POST'))
+@bp.route('/exams/<int:exam_id>/rubrics/<int:criterion_id>/edit', methods=('GET', 'POST'))
+@role_required('Admin', ('Active',))
+def rubric_form(exam_id, criterion_id=None):
+    exam = get_active_exam(exam_id)
+    criterion = get_criterion(exam_id, criterion_id) if criterion_id is not None else None
+    values = dict(request.form) if request.method == 'POST' else dict(criterion or {})
+    errors = []
+    if request.method == 'POST':
+        name = values.get('name', '').strip()
+        description = values.get('description', '').strip()
+        if not 1 <= len(name) <= 100 or len(description) > 2000:
+            errors.append('Criterion name must contain 1–100 characters; description at most 2000.')
+        try:
+            maximum = int(values.get('maximum_marks', ''))
+            if not 1 <= maximum <= 10000:
+                raise ValueError
+        except ValueError:
+            errors.append('Criterion maximum must be a whole number between 1 and 10000.')
+        if not errors:
+            connection = get_db()
+            with connection:
+                connection.execute('BEGIN IMMEDIATE')
+                exam = get_active_exam(exam_id)
+                if criterion_id is not None:
+                    get_criterion(exam_id, criterion_id)
+                total = connection.execute('SELECT coalesce(sum(maximum_marks), 0) FROM rubrics WHERE exam_id = ? AND id != ?', (exam_id, criterion_id or 0)).fetchone()[0]
+                if total + maximum > exam['maximum_marks']:
+                    errors.append('Rubric total cannot exceed the exam maximum.')
+                else:
+                    try:
+                        if criterion is None:
+                            connection.execute('INSERT INTO rubrics (exam_id, name, maximum_marks, description) VALUES (?, ?, ?, ?)', (exam_id, name, maximum, description))
+                        else:
+                            connection.execute('UPDATE rubrics SET name = ?, maximum_marks = ?, description = ? WHERE id = ? AND exam_id = ?', (name, maximum, description, criterion_id, exam_id))
+                    except sqlite3.IntegrityError:
+                        errors.append('That criterion name is already used in this exam.')
+            if not errors:
+                flash('Rubric criterion saved.')
+                return redirect(url_for('admin.exam_detail', exam_id=exam_id))
+    return render_template('admin/rubric_form.html', exam=exam, criterion=criterion, values=values, errors=errors), 400 if errors else 200
+
+
+@bp.post('/exams/<int:exam_id>/rubrics/<int:criterion_id>/delete')
+@role_required('Admin', ('Active',))
+def delete_criterion(exam_id, criterion_id):
+    connection = get_db()
+    with connection:
+        connection.execute('BEGIN IMMEDIATE')
+        get_active_exam(exam_id)
+        get_criterion(exam_id, criterion_id)
+        connection.execute('DELETE FROM rubrics WHERE id = ? AND exam_id = ?', (criterion_id, exam_id))
+    flash('Rubric criterion deleted.')
+    return redirect(url_for('admin.exam_detail', exam_id=exam_id))

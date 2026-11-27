@@ -12,6 +12,33 @@
   <tbody><tr><th scope="row">Slot creation</th><td>{{ exam['creation_start']|replace('T', ' ') }}</td><td>{{ exam['creation_end']|replace('T', ' ') }}</td></tr>
   <tr><th scope="row">Booking</th><td>{{ exam['booking_start']|replace('T', ' ') }}</td><td>{{ exam['booking_end']|replace('T', ' ') }}</td></tr></tbody>
 </table></div>
+<h2 class="h5 mt-4">Assigned examiners</h2>
+<div class="table-responsive"><table class="table table-sm table-bordered bg-white">
+  <thead><tr><th scope="col">User ID</th><th scope="col">Name</th><th scope="col">Account status</th></tr></thead>
+  <tbody>{% for person in assignments %}<tr><td>{{ person['id'] }}</td><td>{{ person['name'] }}</td><td><span class="badge text-bg-light border">{{ person['status'] }}</span></td></tr>
+  {% else %}<tr><td colspan="3">No examiners assigned.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if not exam['archived'] %}
+<form class="form-panel mb-4" method="post" action="{{ url_for('admin.assign_examiner', exam_id=exam['id']) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="form-label" for="examiner_id">Approved examiner</label>
+  <select class="form-select mb-3" id="examiner_id" name="examiner_id" required><option value="">Choose an examiner</option>{% for person in eligible %}<option value="{{ person['id'] }}">{{ person['name'] }} (ID {{ person['id'] }})</option>{% endfor %}</select>
+  <button class="btn btn-outline-secondary" type="submit">Assign examiner</button>
+</form>
+{% endif %}
+<h2 class="h5 mt-4">Rubric</h2>
+<p><strong>Rubric total: {{ rubric_total }} / {{ exam['maximum_marks'] }}</strong>
+  <span class="badge text-bg-light border">{{ 'Matches exam maximum' if rubric_total == exam['maximum_marks'] else 'Incomplete' }}</span></p>
+<p class="small text-secondary">Weightage = criterion maximum ÷ exam maximum × 100. Build one criterion at a time. Evaluation will require an exact total match.</p>
+<div class="table-responsive"><table class="table table-sm table-bordered align-middle bg-white">
+  <thead><tr><th scope="col">Criterion</th><th scope="col">Maximum marks</th><th scope="col">Weightage</th><th scope="col">Actions</th></tr></thead>
+  <tbody>{% for criterion in rubrics %}<tr>
+    <td>{{ criterion['name'] }}{% if criterion['description'] %}<div class="small text-secondary text-break">{{ criterion['description'] }}</div>{% endif %}</td><td>{{ criterion['maximum_marks'] }}</td><td>{{ '%.2f'|format(criterion['maximum_marks'] / exam['maximum_marks'] * 100) }}%</td>
+    <td>{% if not exam['archived'] %}<a href="{{ url_for('admin.rubric_form', exam_id=exam['id'], criterion_id=criterion['id']) }}">Edit</a>
+    <form class="d-inline ms-2" method="post" action="{{ url_for('admin.delete_criterion', exam_id=exam['id'], criterion_id=criterion['id']) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-danger btn-sm" type="submit" aria-label="Delete {{ criterion['name'] }}">Delete</button></form>{% else %}Read-only{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="4">No criteria yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if not exam['archived'] %}<p><a href="{{ url_for('admin.rubric_form', exam_id=exam['id']) }}">Add criterion</a></p>{% endif %}
 {% if not exam['archived'] %}
 <p><a href="{{ url_for('admin.exam_form', exam_id=exam['id']) }}">Edit exam and timeline</a></p>
 <form class="form-panel mb-4" method="post" action="{{ url_for('admin.change_phase', exam_id=exam['id']) }}">
